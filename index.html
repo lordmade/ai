@@ -1,142 +1,197 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grok AI Chatbot</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-        #chat-container {
-            width: 400px;
-            max-width: 90%;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
-            height: 80vh;
-        }
-        #chat-box {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            border-bottom: 1px solid #ddd;
-        }
-        .message {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        .user {
-            background-color: #007bff;
-            color: white;
-            margin-left: 20%;
-            margin-right: 10px;
-        }
-        .bot {
-            background-color: #e9ecef;
-            margin-right: 20%;
-            margin-left: 10px;
-        }
-        #input-container {
-            display: flex;
-            padding: 10px;
-        }
-        #user-input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            outline: none;
-        }
-        #send-button {
-            padding: 10px 20px;
-            margin-left: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        #send-button:hover {
-            background-color: #0056b3;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MusicVerse - Song Submission Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js"></script>
 </head>
-<body>
-    <div id="chat-container">
-        <div id="chat-box"></div>
-        <div id="input-container">
-            <input type="text" id="user-input" placeholder="Type your message...">
-            <button id="send-button">Send</button>
-        </div>
+<body class="bg-gray-100">
+  <div id="app" class="container mx-auto p-4">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-bold">MusicVerse</h1>
+      <div>
+        <button id="signInBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 hidden">Sign In with Google</button>
+        <button id="signOutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 hidden">Sign Out</button>
+        <span id="userInfo" class="text-gray-700"></span>
+      </div>
     </div>
-    <script>
-        const chatBox = document.getElementById('chat-box');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
-        const API_KEY = 'xai-rpJroC8i7t8iqQtFnLd0DwtGir5ER2tMJE5iL0i2LhgF9Z6AqBrErvfo8QI4pNM97nX8R3GWtq7NfoRI'; // Replace with your Grok API key
-        const API_URL = 'https://api.x.ai/v1/chat/completions';
 
-        // Function to add a message to the chat box
-        function addMessage(content, isUser) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
-            messageDiv.textContent = content;
-            chatBox.appendChild(messageDiv);
-            chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to bottom
-        }
+    <!-- Song Upload Form -->
+    <div id="uploadSection" class="mb-8 p-4 bg-white rounded-lg shadow hidden">
+      <h2 class="text-xl font-semibold mb-4">Upload Your Song</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium">Song Title</label>
+          <input id="songTitle" type="text" class="mt-1 p-2 w-full border rounded" placeholder="Enter song title">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Artist</label>
+          <input id="artist" type="text" class="mt-1 p-2 w-full border rounded" placeholder="Enter artist name">
+        </div>
+        <div>
+          <label class="block text-sm font-medium">Song File (MP3)</label>
+          <input id="songFile" type="file" accept="audio/mp3" class="mt-1 p-2 w-full border rounded">
+        </div>
+        <button id="uploadBtn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Upload Song</button>
+      </div>
+    </div>
 
-        // Function to send message to Grok API
-        async function sendMessage() {
-            const message = userInput.value.trim();
-            if (!message) return;
+    <!-- Song List -->
+    <div>
+      <h2 class="text-xl font-semibold mb-4">Available Songs</h2>
+      <div id="songList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </div>
 
-            // Add user message to chat
-            addMessage(message, true);
-            userInput.value = ''; // Clear input
+    <!-- Audio Player -->
+    <div id="audioPlayer" class="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 hidden">
+      <h3 id="currentSongInfo" class="text-lg font-medium"></h3>
+      <audio id="audio" controls class="w-full mt-2"></audio>
+    </div>
+  </div>
 
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${API_KEY}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        model: 'grok-beta', // Use appropriate model (e.g., grok-3 if available)
-                        messages: [{ role: 'user', content: message }],
-                        temperature: 0.7,
-                        max_tokens: 500
-                    })
-                });
+  <script>
+    // Firebase Configuration (Replace with your Firebase project config)
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
 
-                const data = await response.json();
-                const botResponse = data.choices[0].message.content;
-                addMessage(botResponse, false);
-            } catch (error) {
-                console.error('Error:', error);
-                addMessage('Sorry, something went wrong. Please try again.', false);
-            }
-        }
+    // DOM Elements
+    const signInBtn = document.getElementById('signInBtn');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const userInfo = document.getElementById('userInfo');
+    const uploadSection = document.getElementById('uploadSection');
+    const songTitle = document.getElementById('songTitle');
+    const artist = document.getElementById('artist');
+    const songFile = document.getElementById('songFile');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const songList = document.getElementById('songList');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const audio = document.getElementById('audio');
+    const currentSongInfo = document.getElementById('currentSongInfo');
 
-        // Event listeners
-        sendButton.addEventListener('click', sendMessage);
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
+    // Authentication State
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        userInfo.textContent = `Signed in as ${user.displayName}`;
+        signInBtn.classList.add('hidden');
+        signOutBtn.classList.remove('hidden');
+        uploadSection.classList.remove('hidden');
+      } else {
+        userInfo.textContent = '';
+        signInBtn.classList.remove('hidden');
+        signOutBtn.classList.add('hidden');
+        uploadSection.classList.add('hidden');
+      }
+    });
+
+    // Sign in with Google
+    signInBtn.addEventListener('click', () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch((error) => {
+        console.error('Sign-in error:', error);
+        alert('Failed to sign in.');
+      });
+    });
+
+    // Sign out
+    signOutBtn.addEventListener('click', () => {
+      auth.signOut().catch((error) => {
+        console.error('Sign-out error:', error);
+        alert('Failed to sign out.');
+      });
+    });
+
+    // Fetch and display songs
+    function loadSongs() {
+      db.collection('songs').orderBy('timestamp', 'desc').get().then((snapshot) => {
+        songList.innerHTML = '';
+        snapshot.forEach((doc) => {
+          const song = doc.data();
+          const songCard = document.createElement('div');
+          songCard.className = 'p-4 bg-white rounded-lg shadow';
+          songCard.innerHTML = `
+            <h3 class="text-lg font-medium">${song.title}</h3>
+            <p class="text-gray-600">${song.artist}</p>
+            <button class="play-btn mt-2 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" data-url="${song.url}" data-title="${song.title}" data-artist="${song.artist}">Play</button>
+          `;
+          songList.appendChild(songCard);
         });
-    </script>
+
+        // Add play button listeners
+        document.querySelectorAll('.play-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const url = btn.getAttribute('data-url');
+            const title = btn.getAttribute('data-title');
+            const artist = btn.getAttribute('data-artist');
+            audio.src = url;
+            currentSongInfo.textContent = `${title} - ${artist}`;
+            audioPlayer.classList.remove('hidden');
+            audio.play();
+          });
+        });
+      }).catch((error) => {
+        console.error('Error fetching songs:', error);
+      });
+    }
+
+    // Load songs on page load
+    loadSongs();
+
+    // Upload song
+    uploadBtn.addEventListener('click', async () => {
+      if (!songTitle.value || !artist.value || !songFile.files[0]) {
+        alert('Please fill in all fields and select an MP3 file.');
+        return;
+      }
+
+      if (songFile.files[0].type !== 'audio/mpeg') {
+        alert('Please select an MP3 file.');
+        return;
+      }
+
+      try {
+        // Upload file to Firebase Storage
+        const storageRef = storage.ref(`songs/${Date.now()}-${songFile.files[0].name}`);
+        const snapshot = await storageRef.put(songFile.files[0]);
+        const url = await snapshot.ref.getDownloadURL();
+
+        // Save metadata to Firestore
+        await db.collection('songs').add({
+          title: songTitle.value,
+          artist: artist.value,
+          url: url,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Clear form
+        songTitle.value = '';
+        artist.value = '';
+        songFile.value = '';
+        alert('Song uploaded successfully!');
+        loadSongs(); // Refresh song list
+      } catch (error) {
+        console.error('Upload error:', error);
+        alert('Failed to upload song.');
+      }
+    });
+  </script>
 </body>
 </html>
